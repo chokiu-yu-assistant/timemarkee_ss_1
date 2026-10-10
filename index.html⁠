@@ -1,0 +1,1814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Timemarkee v1.0.0 - Commute & Trip Time Tracker</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js for Commute Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#312e81',
+                        },
+                        accent: {
+                            emerald: '#10b981',
+                            amber: '#f59e0b',
+                            rose: '#f43f5e',
+                            cyan: '#06b6d4'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        
+        .dark .glass-panel {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .calm-glow {
+            box-shadow: 0 4px 20px -2px rgba(99, 102, 241, 0.15);
+        }
+
+        /* Rolling Wheel Drum Picker Styling */
+        .wheel-container {
+            height: 108px;
+            overflow-y: scroll;
+            scroll-snap-type: y mandatory;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            overscroll-behavior: contain;
+        }
+        .wheel-container::-webkit-scrollbar {
+            display: none;
+        }
+        .wheel-item {
+            height: 36px;
+            scroll-snap-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: monospace;
+            font-weight: 700;
+            font-size: 1.125rem;
+            cursor: pointer;
+            transition: color 0.15s ease, opacity 0.15s ease;
+        }
+
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.4);
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-200 selection:bg-brand-500 selection:text-white pb-12">
+
+    <header class="sticky top-0 z-30 glass-panel border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+        <div class="max-w-3xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-2.5">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-accent-cyan flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+                    <i data-lucide="timer" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-1.5">
+                        <h1 class="font-extrabold text-lg leading-tight tracking-tight bg-gradient-to-r from-brand-600 to-indigo-600 dark:from-brand-400 dark:to-cyan-400 bg-clip-text text-transparent">
+                            Timemarkee
+                        </h1>
+                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-brand-100 dark:bg-brand-950 text-brand-600 dark:text-brand-300 border border-brand-200 dark:border-brand-800">v1.0</span>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Calm Commute & Trip ETA Marker</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2">
+                <!-- Audio Feedback Toggle -->
+                <button id="soundToggleBtn" onclick="toggleSound()" class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition" title="Toggle Audio Chimes">
+                    <span id="soundIconContainer">
+                        <i data-lucide="volume-2" class="w-5 h-5"></i>
+                    </span>
+                </button>
+
+                <!-- Dark Mode Toggle -->
+                <button onclick="toggleDarkMode()" class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                    <i data-lucide="moon" class="w-5 h-5 dark:hidden"></i>
+                    <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-3xl w-full mx-auto px-4 pt-4 space-y-5">
+
+        <!-- Tab Navigation Bar -->
+        <nav class="flex p-1 bg-slate-200/80 dark:bg-slate-900 rounded-2xl text-sm font-semibold text-slate-600 dark:text-slate-400">
+            <button id="tabTrackBtn" onclick="switchTab('tracker')" class="flex-1 py-2.5 rounded-xl flex items-center justify-center space-x-2 transition bg-white dark:bg-slate-800 text-brand-600 dark:text-brand-400 shadow-sm">
+                <i data-lucide="navigation" class="w-4 h-4"></i>
+                <span>Live Commute</span>
+            </button>
+            <button id="tabPresetsBtn" onclick="switchTab('presets')" class="flex-1 py-2.5 rounded-xl flex items-center justify-center space-x-2 transition hover:text-slate-900 dark:hover:text-slate-200">
+                <i data-lucide="map-pin" class="w-4 h-4"></i>
+                <span>Presets</span>
+            </button>
+            <button id="tabHistoryBtn" onclick="switchTab('history')" class="flex-1 py-2.5 rounded-xl flex items-center justify-center space-x-2 transition hover:text-slate-900 dark:hover:text-slate-200">
+                <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+                <span>Analytics</span>
+            </button>
+        </nav>
+
+        <!-- Toast Notification Area -->
+        <div id="toast" class="hidden fixed bottom-6 right-6 z-50 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-4 py-3 rounded-2xl shadow-xl flex items-center space-x-3 transition-all transform translate-y-2">
+            <span id="toastIconContainer">
+                <i data-lucide="check-circle-2" class="w-5 h-5 text-accent-emerald"></i>
+            </span>
+            <span id="toastMsg" class="text-sm font-medium">Action logged</span>
+        </div>
+
+        <section id="viewTracker" class="space-y-4">
+            
+            <div id="noActiveJourneyState" class="glass-panel p-6 rounded-3xl space-y-4 shadow-sm text-center">
+                <!-- Active Journey In-Progress Banner -->
+                <div id="activeJourneyBanner" class="hidden text-left p-4 rounded-2xl bg-gradient-to-r from-brand-600 to-indigo-600 text-white shadow-md space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span class="text-xs font-bold uppercase tracking-wider text-brand-100">Journey in Progress</span>
+                        </div>
+                        <span id="bannerProgressBadge" class="text-xs font-mono bg-white/20 px-2 py-0.5 rounded-md font-semibold">Step 1 of 5</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 id="bannerRouteTitle" class="font-extrabold text-lg leading-tight">Home to Office</h3>
+                            <p id="bannerCurrentStep" class="text-xs text-brand-100 mt-0.5">Next step: Walk to Bus Stop</p>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="resumeJourney()" class="px-4 py-2 bg-white text-brand-600 font-bold rounded-xl text-xs hover:bg-brand-50 shadow-sm transition flex items-center space-x-1.5">
+                                <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
+                                <span>Resume Tracking</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="w-16 h-16 bg-brand-50 dark:bg-slate-800/80 rounded-2xl mx-auto flex items-center justify-center text-brand-600 dark:text-brand-400">
+                    <i data-lucide="play-circle" class="w-10 h-10"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold">Ready to Start a Journey?</h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto mt-1">Select a route below to confirm your departure time and start step-by-step ETA tracking.</p>
+                </div>
+
+                <!-- Quick Start Buttons -->
+                <div id="quickStartPresetContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-left">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <div id="activeJourneyState" class="hidden space-y-4">
+                
+                <!-- Main Status Card -->
+                <div class="glass-panel p-6 rounded-3xl shadow-lg border-slate-200 dark:border-slate-800 relative overflow-hidden calm-glow">
+
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                Journey in Progress
+                            </span>
+                            <h2 id="activeRouteTitle" class="text-2xl font-extrabold mt-1 text-slate-900 dark:text-white">Morning Commute</h2>
+                        </div>
+                        <div class="flex items-center space-x-1.5">
+                            <button onclick="returnToHome()" class="text-xs font-semibold px-3 py-1.5 rounded-xl text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center space-x-1">
+                                <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+                                <span>Home Page</span>
+                            </button>
+                            <button onclick="abortJourney()" class="text-xs font-semibold px-3 py-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Visual Progress Bar -->
+                    <div class="space-y-1.5 mb-5">
+                        <div class="flex justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
+                            <span id="activeStepProgressText">Step 1 of 10</span>
+                            <span id="activeStartClockTime" class="text-slate-400 font-medium">Started at 08:42</span>
+                        </div>
+                        <div class="w-full h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden p-0.5">
+                            <div id="activeProgressBar" class="h-full bg-brand-600 rounded-full transition-all duration-500 w-1/4"></div>
+                        </div>
+                    </div>
+
+                    <!-- Realtime Dynamic ETA & Next Waypoint Box -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center bg-slate-100/70 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 mb-4">
+                        <div>
+                            <p class="text-xs text-slate-400 uppercase font-semibold tracking-wider">Start Time</p>
+                            <div class="flex flex-col items-center justify-center gap-0.5 mt-0.5">
+                                <div class="flex items-center gap-1">
+                                    <p id="statStartTime" class="text-xl sm:text-2xl font-bold font-mono text-slate-800 dark:text-slate-200">08:42</p>
+                                    <button onclick="openEditStartTimeModal()" title="Edit Start Date & Time" class="p-1 text-slate-400 hover:text-brand-600 transition rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800">
+                                        <i data-lucide="calendar" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                                <span id="statStartDateStr" class="text-[10px] font-semibold text-slate-400">Today</span>
+                            </div>
+                        </div>
+                        
+                        <div class="border-y sm:border-y-0 sm:border-x border-slate-200 dark:border-slate-800 py-2 sm:py-0">
+                            <p class="text-xs text-brand-600 dark:text-brand-400 uppercase font-bold tracking-wider flex items-center justify-center gap-1">
+                                <i data-lucide="compass" class="w-3.5 h-3.5"></i> Next Stop ETA
+                            </p>
+                            <p id="statNextStepEta" class="text-xl sm:text-2xl font-bold font-mono text-brand-600 dark:text-brand-400">08:45</p>
+                            <p id="statNextStepName" class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 truncate px-2">Walk to Bus Stop (+3m)</p>
+                        </div>
+
+                        <div>
+                            <p class="text-xs text-slate-400 uppercase font-semibold tracking-wider">Overall Dynamic ETA</p>
+                            <p id="statEta" class="text-xl sm:text-2xl font-bold font-mono text-slate-800 dark:text-slate-200">09:45</p>
+                            <p id="statRemaining" class="text-[10px] font-semibold text-slate-400">Remaining: ~63m</p>
+                        </div>
+                    </div>
+
+                    <!-- Real-Time Rolling Time Selector for Logging Step -->
+                    <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 mb-4">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Log Timestamp Picker</span>
+                            <div id="timeSyncBadge">
+                                <!-- Dynamic Sync Pill -->
+                            </div>
+                        </div>
+
+                        <!-- Rolling Drum Wheel Controls -->
+                        <div class="relative flex items-center justify-center gap-4 py-1">
+                            <!-- Selected Highlight Banner -->
+                            <div class="absolute inset-x-8 top-1/2 -translate-y-1/2 h-9 bg-brand-50 dark:bg-brand-950/60 rounded-xl border border-brand-200 dark:border-brand-800/80 pointer-events-none"></div>
+
+                            <!-- Hours Wheel -->
+                            <div class="w-20 text-center relative z-10">
+                                <p class="text-[10px] uppercase font-bold text-slate-400 mb-1">Hours</p>
+                                <div id="hoursWheel" onscroll="handleWheelScroll('hours')" class="wheel-container">
+                                    <!-- Options injected dynamically -->
+                                </div>
+                            </div>
+
+                            <span class="text-xl font-bold text-slate-400 relative z-10 mt-4">:</span>
+
+                            <!-- Minutes Wheel -->
+                            <div class="w-20 text-center relative z-10">
+                                <p class="text-[10px] uppercase font-bold text-slate-400 mb-1">Mins</p>
+                                <div id="minutesWheel" onscroll="handleWheelScroll('minutes')" class="wheel-container">
+                                    <!-- Options injected dynamically -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Reset Clock Action -->
+                        <div class="flex items-center justify-between pt-1 text-xs">
+                            <button id="resetNowBtn" onclick="resetToNow()" class="hidden px-2.5 py-1 rounded-lg text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/40 hover:bg-brand-100 font-semibold transition flex items-center space-x-1">
+                                <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                                <span>Reset to Live Clock</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Next Waypoint Remark Field -->
+                    <div class="mb-4">
+                        <label for="nextStepRemarkInput" class="block text-xs font-bold text-slate-500 uppercase mb-1 flex items-center justify-between">
+                            <span>Remark / Note for Next Waypoint <span class="text-[10px] text-slate-400 font-normal">(Optional)</span></span>
+                            <span class="text-[10px] text-brand-600 dark:text-brand-400" id="remarkStatusTag"></span>
+                        </label>
+                        <input type="text" id="nextStepRemarkInput" placeholder="e.g. Bus delayed 2 mins, heavy rain at bus stop..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+
+                    <!-- Main Action Button: Log / Mark Next Step -->
+                    <div>
+                        <button id="markStepBtn" onclick="markNextStep()" class="w-full py-3.5 px-5 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-extrabold rounded-2xl shadow-lg shadow-brand-500/25 active:scale-[0.98] transition flex items-center justify-center space-x-2.5 text-base sm:text-lg">
+                            <i data-lucide="check-circle-2" class="w-5 h-5 sm:w-6 sm:h-6"></i>
+                            <span id="markBtnLabel">Log Step: Walk to Bus Stop</span>
+                        </button>
+                    </div>
+
+                </div>
+
+                <!-- Waypoints / Stop Logs Header -->
+                <div class="glass-panel p-5 rounded-3xl space-y-3">
+                    <h3 class="font-bold text-sm text-slate-500 uppercase tracking-wider">Journey Waypoints</h3>
+                    <div id="activeWaypointsList" class="space-y-2">
+                        <!-- Waypoints rendered dynamically -->
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <section id="viewPresets" class="hidden space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-xl font-bold">Commute Presets</h2>
+                    <p class="text-xs text-slate-400">Configure standard routes, transport legs, and remarks.</p>
+                </div>
+                <button onclick="openCreatePresetModal()" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center space-x-1.5">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    <span>New Preset</span>
+                </button>
+            </div>
+
+            <div id="presetsContainer" class="space-y-3">
+                <!-- Presets list rendered dynamically -->
+            </div>
+        </section>
+
+        <section id="viewHistory" class="hidden space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                    <h2 class="text-xl font-bold">Commute Analytics</h2>
+                    <p class="text-xs text-slate-400">Filter by route or transport category for targeted stats.</p>
+                </div>
+            </div>
+
+            <!-- Analytics Filters -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 glass-panel p-3.5 rounded-2xl">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Filter by Route Preset</label>
+                    <select id="analyticsRouteFilter" onchange="updateAnalytics()" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-bold focus:outline-none">
+                        <option value="ALL">All Preset Routes</option>
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Filter by Transport Mode</label>
+                    <select id="analyticsModeFilter" onchange="updateAnalytics()" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-bold focus:outline-none">
+                        <option value="ALL">All Transport Modes</option>
+                        <option value="Walk">Walking Only</option>
+                        <option value="Bus">Bus Only</option>
+                        <option value="MTR / Rail">MTR / Rail Only</option>
+                        <option value="Interchange">Station Interchange</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Summary Stat Cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div class="glass-panel p-4 rounded-2xl text-center">
+                    <p class="text-[10px] text-slate-400 font-bold uppercase">Total Trips</p>
+                    <p id="statTotalJourneys" class="text-2xl font-extrabold mt-1 text-brand-600 dark:text-brand-400">0</p>
+                </div>
+                <div class="glass-panel p-4 rounded-2xl text-center">
+                    <p class="text-[10px] text-slate-400 font-bold uppercase">Avg Duration</p>
+                    <p id="statAvgDuration" class="text-2xl font-extrabold mt-1 text-slate-800 dark:text-slate-200">0m</p>
+                </div>
+                <div class="glass-panel p-4 rounded-2xl text-center">
+                    <p class="text-[10px] text-slate-400 font-bold uppercase">Avg Delay</p>
+                    <p id="statAvgDelay" class="text-2xl font-extrabold mt-1 text-amber-500">+0m</p>
+                </div>
+                <div class="glass-panel p-4 rounded-2xl text-center">
+                    <p class="text-[10px] text-slate-400 font-bold uppercase">On-Time Rate</p>
+                    <p id="statOnTimeRate" class="text-2xl font-extrabold mt-1 text-emerald-500">100%</p>
+                </div>
+            </div>
+
+            <!-- Duration Trend Chart -->
+            <div class="glass-panel p-5 rounded-3xl space-y-3">
+                <h3 class="font-bold text-sm text-slate-700 dark:text-slate-300">Trip Duration History (mins)</h3>
+                <div class="h-48 w-full">
+                    <canvas id="durationChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Recent History Logs -->
+            <div class="glass-panel p-5 rounded-3xl space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-sm text-slate-700 dark:text-slate-300">Completed Trips Log</h3>
+                    <button onclick="clearHistory()" class="text-xs text-rose-500 hover:underline">Clear History</button>
+                </div>
+                <div id="historyLogsContainer" class="space-y-2">
+                    <!-- History rows populated dynamically -->
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+
+    <!-- MODAL 0: START JOURNEY CONFIRMATION -->
+    <div id="startConfirmModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-800">
+            <input type="hidden" id="startConfirmPresetId">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/60 text-brand-600 dark:text-brand-300 flex items-center justify-center">
+                        <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+                    </div>
+                    <h3 id="startConfirmPresetName" class="font-extrabold text-base">Confirm Journey Departure</h3>
+                </div>
+                <button onclick="closeStartConfirmModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <p class="text-xs text-slate-500 dark:text-slate-400">Verify or adjust your journey start date and time before beginning step tracking.</p>
+            
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Start Date</label>
+                    <input type="date" id="startConfirmDateInput" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Start Time (HH:MM)</label>
+                    <input type="time" id="startConfirmTimeInput" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2 pt-2">
+                <button onclick="closeStartConfirmModal()" class="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs">Cancel</button>
+                <button onclick="confirmAndLaunchJourney()" class="flex-1 py-2.5 rounded-xl bg-brand-600 text-white font-bold text-xs shadow-md hover:bg-brand-500 flex items-center justify-center space-x-1.5">
+                    <i data-lucide="navigation" class="w-3.5 h-3.5"></i>
+                    <span>Confirm & Start</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 1: EDIT JOURNEY START DATE & TIME -->
+    <div id="editStartTimeModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-800">
+            <div class="flex items-center justify-between">
+                <h3 class="font-extrabold text-base">Edit Journey Start Date & Time</h3>
+                <button onclick="closeEditStartTimeModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Start Date</label>
+                    <input type="date" id="journeyStartDateInput" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Start Time (HH:MM)</label>
+                    <input type="time" id="journeyStartTimeInput" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2 pt-2">
+                <button onclick="closeEditStartTimeModal()" class="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs">Cancel</button>
+                <button onclick="saveJourneyStartTime()" class="flex-1 py-2.5 rounded-xl bg-brand-600 text-white font-bold text-xs shadow-md hover:bg-brand-500">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: AMEND LOGGED WAYPOINT -->
+    <div id="amendWaypointModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-800">
+            <input type="hidden" id="amendStepIndex" value="-1">
+            <div class="flex items-center justify-between">
+                <h3 id="amendWaypointTitle" class="font-extrabold text-base">Amend Waypoint</h3>
+                <button onclick="closeAmendWaypointModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Date</label>
+                    <input type="date" id="amendStepDateInput" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Arrival Time (HH:MM)</label>
+                    <input type="time" id="amendStepTimeInput" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Remark / Note</label>
+                    <input type="text" id="amendStepRemarkInput" placeholder="Optional remark for this waypoint..." class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2 pt-2">
+                <button onclick="closeAmendWaypointModal()" class="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs">Cancel</button>
+                <button onclick="saveAmendedWaypoint()" class="flex-1 py-2.5 rounded-xl bg-brand-600 text-white font-bold text-xs shadow-md hover:bg-brand-500">Update Waypoint</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: CREATE / EDIT ROUTE PRESET -->
+    <div id="presetModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between">
+                <h3 id="modalPresetTitle" class="font-extrabold text-base">Create Journey Preset</h3>
+                <button onclick="closePresetModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <form onsubmit="savePreset(event)" class="space-y-4">
+                <input type="hidden" id="presetId">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Preset Name</label>
+                    <input type="text" id="presetName" required placeholder="e.g. Home to Office" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Origin</label>
+                        <input type="text" id="presetOrigin" required placeholder="Home" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Destination</label>
+                        <input type="text" id="presetDestination" required placeholder="Office" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Transit Details / Summary</label>
+                    <input type="text" id="presetTransitDetails" placeholder="e.g. 🚌 KMB 272A Bus ➔ 🚆 MTR East Rail Line" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs focus:outline-none">
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-bold text-slate-500 uppercase">Waypoints & Target Minutes</label>
+                        <button type="button" onclick="addWaypointRow()" class="text-xs text-brand-600 font-bold hover:underline">+ Add Stop</button>
+                    </div>
+                    <div id="waypointRows" class="space-y-2">
+                        <!-- Waypoint input rows -->
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-2 pt-3">
+                    <button type="button" onclick="closePresetModal()" class="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs">Cancel</button>
+                    <button type="submit" class="flex-1 py-2.5 rounded-xl bg-brand-600 text-white font-bold text-xs shadow-md hover:bg-brand-500">Save Preset</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 4: FULL TRIP SUMMARY & EXPORT TEXT -->
+    <div id="tripSummaryModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-300 flex items-center justify-center">
+                        <i data-lucide="award" class="w-4 h-4"></i>
+                    </div>
+                    <h3 id="summaryModalTitle" class="font-extrabold text-base">Journey Summary</h3>
+                </div>
+                <button onclick="closeTripSummaryModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Summary Overview Grid -->
+            <div class="grid grid-cols-3 gap-2 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl text-center border border-slate-200/60 dark:border-slate-700/60">
+                <div>
+                    <p class="text-[10px] uppercase font-bold text-slate-400">Total Actual</p>
+                    <p id="summaryActualTime" class="text-xl font-extrabold text-brand-600 dark:text-brand-400">--</p>
+                </div>
+                <div>
+                    <p class="text-[10px] uppercase font-bold text-slate-400">Target Time</p>
+                    <p id="summaryTargetTime" class="text-xl font-extrabold text-slate-700 dark:text-slate-300">--</p>
+                </div>
+                <div>
+                    <p class="text-[10px] uppercase font-bold text-slate-400">Variance</p>
+                    <p id="summaryVariance" class="text-xl font-extrabold text-amber-500">--</p>
+                </div>
+            </div>
+
+            <p id="summaryDateLine" class="text-xs text-slate-400 font-semibold"></p>
+
+            <!-- Detailed Breakdown List -->
+            <div class="space-y-2">
+                <h4 class="text-xs font-bold text-slate-500 uppercase">Waypoint Breakdown</h4>
+                <div id="summaryWaypointsList" class="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    <!-- Dynamic -->
+                </div>
+            </div>
+
+            <!-- Text Preview Box for Exporting -->
+            <div class="space-y-1.5">
+                <label class="block text-xs font-bold text-slate-500 uppercase">Export Text Preview</label>
+                <textarea id="summaryExportTextArea" readonly class="w-full h-32 p-3 rounded-2xl bg-slate-100 dark:bg-slate-950 font-mono text-xs border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 resize-none focus:outline-none"></textarea>
+            </div>
+
+            <div class="flex items-center space-x-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button onclick="copySummaryText()" class="flex-1 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-md transition flex items-center justify-center space-x-2">
+                    <i data-lucide="copy" class="w-4 h-4"></i>
+                    <span>Copy Summary to Clipboard</span>
+                </button>
+                <button onclick="closeTripSummaryModal()" class="px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // App Version Const
+        const APP_VERSION = 'v1.0.0';
+
+        // Default Commute Presets
+        const DEFAULT_PRESETS = [
+            {
+                id: 'preset-home-office',
+                name: 'Home to Office',
+                origin: 'Home (雲滙)',
+                destination: 'Office (黃竹坑)',
+                transitDetails: '🚌 KMB 272A Bus ➔ 🚆 MTR East Rail Line ➔ 🚇 MTR South Island Line',
+                steps: [
+                    { name: 'Walk to Bus Stop (雲滙 St. Martin)', targetMinutes: 3, transport: 'Walk', remark: '' },
+                    { name: 'KMB 272A Bus Boarded (往大學站)', targetMinutes: 3, transport: 'Bus', remark: '' },
+                    { name: 'KMB 272A Arrival at University Station (大學站)', targetMinutes: 12, transport: 'Bus', remark: '' },
+                    { name: 'MTR Platform Walk (大學站 港鐵月台)', targetMinutes: 2, transport: 'Walk', remark: '' },
+                    { name: 'MTR East Rail Departure (東鐵綫 往金鐘)', targetMinutes: 2, transport: 'MTR / Rail', remark: '' },
+                    { name: 'East Rail Arrival at Admiralty (金鐘站)', targetMinutes: 25, transport: 'MTR / Rail', remark: '' },
+                    { name: 'Interchange Walk to South Island Line (金鐘站)', targetMinutes: 1, transport: 'Interchange', remark: '' },
+                    { name: 'South Island Line Departure (南港島綫 往海怡半島)', targetMinutes: 1, transport: 'MTR / Rail', remark: '' },
+                    { name: 'South Island Line Arrival at Wong Chuk Hang (黃竹坑站)', targetMinutes: 6, transport: 'MTR / Rail', remark: '' },
+                    { name: 'Walk to Office Desk (黃竹坑 步行至辦公室)', targetMinutes: 8, transport: 'Walk', remark: '' }
+                ]
+            },
+            {
+                id: 'preset-office-home',
+                name: 'Office to Home',
+                origin: 'Office (黃竹坑)',
+                destination: 'Home (雲滙)',
+                transitDetails: '🚇 MTR South Island Line ➔ 🚆 MTR East Rail Line ➔ 🚌 KMB 272A Bus',
+                steps: [
+                    { name: 'Walk to MTR Platform (黃竹坑站)', targetMinutes: 8, transport: 'Walk', remark: '' },
+                    { name: 'South Island Line Departure (南港島綫 往金鐘)', targetMinutes: 1, transport: 'MTR / Rail', remark: '' },
+                    { name: 'South Island Line Arrival at Admiralty (金鐘站)', targetMinutes: 7, transport: 'MTR / Rail', remark: '' },
+                    { name: 'Interchange Walk to East Rail Line (金鐘站)', targetMinutes: 1, transport: 'Interchange', remark: '' },
+                    { name: 'East Rail Line Departure (東鐵綫 往羅湖/落馬洲)', targetMinutes: 1, transport: 'MTR / Rail', remark: '' },
+                    { name: 'East Rail Arrival at University (大學站)', targetMinutes: 23, transport: 'MTR / Rail', remark: '' },
+                    { name: 'Walk to Bus Terminus (大學站 巴士總站)', targetMinutes: 4, transport: 'Walk', remark: '' },
+                    { name: 'KMB 272A Bus Boarded (往白石角/雲滙)', targetMinutes: 6, transport: 'Bus', remark: '' },
+                    { name: 'KMB 272A Arrival at St. Martin (雲滙)', targetMinutes: 9, transport: 'Bus', remark: '' },
+                    { name: 'Walk Home (雲滙 步行回家)', targetMinutes: 4, transport: 'Walk', remark: '' }
+                ]
+            }
+        ];
+
+        // Global Application State
+        let presets = [];
+        let history = [];
+        let activeJourney = null;
+        let activeSummaryTrip = null;
+        let chartInstance = null;
+        let soundEnabled = true;
+
+        let isAutoSyncingTime = true;
+        let selectedPickerHour = new Date().getHours();
+        let selectedPickerMinute = new Date().getMinutes();
+        let realTimeClockInterval = null;
+
+        // Save State to LocalStorage
+        function saveStorage() {
+            try {
+                localStorage.setItem('timemarkee_presets', JSON.stringify(presets));
+                localStorage.setItem('timemarkee_history', JSON.stringify(history));
+                if (activeJourney) {
+                    localStorage.setItem('timemarkee_active_journey', JSON.stringify(activeJourney));
+                } else {
+                    localStorage.removeItem('timemarkee_active_journey');
+                }
+            } catch (e) {
+                console.error("Storage save error:", e);
+            }
+        }
+
+        // Audio Synth Engine for subtle sound feedback
+        function playChime(type = 'mark') {
+            if (!soundEnabled) return;
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) return;
+                const ctx = new AudioCtx();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                if (type === 'mark') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(659.25, ctx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.25);
+                } else if (type === 'finish') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+                    osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.12);
+                    osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.24);
+                    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.4);
+                }
+                setTimeout(() => { ctx.close(); }, 500);
+            } catch(e) {
+                console.log('Audio playback unavailable', e);
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const container = document.getElementById('soundIconContainer');
+            if (soundEnabled) {
+                container.innerHTML = '<i data-lucide="volume-2" class="w-5 h-5"></i>';
+                showToast('Audio feedback enabled', 'check-circle-2');
+            } else {
+                container.innerHTML = '<i data-lucide="volume-x" class="w-5 h-5"></i>';
+                showToast('Audio muted', 'volume-x');
+            }
+            lucide.createIcons();
+        }
+
+        window.onload = function() {
+            loadStorage();
+            renderQuickStartPresets();
+            renderPresetsList();
+            populateAnalyticsRouteFilter();
+            renderHistoryLogs();
+            buildRollingWheelItems();
+            startRealTimeClock();
+            lucide.createIcons();
+
+            // Auto-restore active journey if saved in localStorage
+            const savedActive = localStorage.getItem('timemarkee_active_journey');
+            if (savedActive) {
+                try {
+                    activeJourney = JSON.parse(savedActive);
+                    if (activeJourney && activeJourney.steps) {
+                        showActiveJourneyUI();
+                    }
+                } catch(e) {
+                    console.error("Failed to restore active journey", e);
+                }
+            }
+        };
+
+        function buildRollingWheelItems() {
+            const hoursWheel = document.getElementById('hoursWheel');
+            const minutesWheel = document.getElementById('minutesWheel');
+
+            if (!hoursWheel || !minutesWheel) return;
+
+            let hHtml = '<div class="wheel-item opacity-0 select-none"></div>';
+            for (let i = 0; i < 24; i++) {
+                const val = i.toString().padStart(2, '0');
+                hHtml += `<div class="wheel-item text-slate-700 dark:text-slate-300" onclick="scrollWheelTo('hours', ${i})">${val}</div>`;
+            }
+            hHtml += '<div class="wheel-item opacity-0 select-none"></div>';
+            hoursWheel.innerHTML = hHtml;
+
+            let mHtml = '<div class="wheel-item opacity-0 select-none"></div>';
+            for (let i = 0; i < 60; i++) {
+                const val = i.toString().padStart(2, '0');
+                mHtml += `<div class="wheel-item text-slate-700 dark:text-slate-300" onclick="scrollWheelTo('minutes', ${i})">${val}</div>`;
+            }
+            mHtml += '<div class="wheel-item opacity-0 select-none"></div>';
+            minutesWheel.innerHTML = mHtml;
+        }
+
+        function startRealTimeClock() {
+            if (realTimeClockInterval) clearInterval(realTimeClockInterval);
+            realTimeClockInterval = setInterval(() => {
+                if (isAutoSyncingTime) {
+                    syncPickerToCurrentTime();
+                }
+            }, 1000);
+            syncPickerToCurrentTime();
+        }
+
+        function syncPickerToCurrentTime() {
+            const now = new Date();
+            selectedPickerHour = now.getHours();
+            selectedPickerMinute = now.getMinutes();
+            scrollWheelTo('hours', selectedPickerHour, false);
+            scrollWheelTo('minutes', selectedPickerMinute, false);
+            updateTimeSyncUI();
+        }
+
+        function scrollWheelTo(type, index, manualTrigger = true) {
+            const container = document.getElementById(type === 'hours' ? 'hoursWheel' : 'minutesWheel');
+            if (!container) return;
+            const itemHeight = 36;
+            container.scrollTo({ top: index * itemHeight, behavior: manualTrigger ? 'smooth' : 'auto' });
+            
+            if (type === 'hours') selectedPickerHour = index;
+            if (type === 'minutes') selectedPickerMinute = index;
+
+            if (manualTrigger) {
+                isAutoSyncingTime = false;
+                updateTimeSyncUI();
+            }
+        }
+
+        let scrollTimeout = null;
+        function handleWheelScroll(type) {
+            const container = document.getElementById(type === 'hours' ? 'hoursWheel' : 'minutesWheel');
+            if (!container) return;
+            
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() => {
+                const itemHeight = 36;
+                const index = Math.round(container.scrollTop / itemHeight);
+                const maxIndex = type === 'hours' ? 23 : 59;
+                const clampedIndex = Math.max(0, Math.min(index, maxIndex));
+
+                if (type === 'hours') selectedPickerHour = clampedIndex;
+                if (type === 'minutes') selectedPickerMinute = clampedIndex;
+
+                const now = new Date();
+                if (selectedPickerHour !== now.getHours() || selectedPickerMinute !== now.getMinutes()) {
+                    isAutoSyncingTime = false;
+                }
+                updateTimeSyncUI();
+            }, 80);
+        }
+
+        function resetToNow() {
+            isAutoSyncingTime = true;
+            syncPickerToCurrentTime();
+            showToast('Time picker synced to live clock');
+        }
+
+        function updateTimeSyncUI() {
+            const badgeContainer = document.getElementById('timeSyncBadge');
+            const resetBtn = document.getElementById('resetNowBtn');
+            if (!badgeContainer || !resetBtn) return;
+
+            const hourStr = selectedPickerHour.toString().padStart(2, '0');
+            const minStr = selectedPickerMinute.toString().padStart(2, '0');
+
+            if (isAutoSyncingTime) {
+                badgeContainer.innerHTML = `
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Real-time Sync (${hourStr}:${minStr})
+                    </span>`;
+                resetBtn.classList.add('hidden');
+            } else {
+                badgeContainer.innerHTML = `
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300">
+                        Custom Time: ${hourStr}:${minStr}
+                    </span>`;
+                resetBtn.classList.remove('hidden');
+            }
+            lucide.createIcons();
+        }
+
+        function loadStorage() {
+            const savedPresets = localStorage.getItem('timemarkee_presets');
+            presets = savedPresets ? JSON.parse(savedPresets) : DEFAULT_PRESETS;
+
+            const savedHistory = localStorage.getItem('timemarkee_history');
+            history = savedHistory ? JSON.parse(savedHistory) : [];
+
+            // Sanitize history data to safeguard against date jumps
+            let historyUpdated = false;
+            history.forEach(h => {
+                if (h.totalActualMins > 1000 || h.totalActualMins < 0) {
+                    h.totalActualMins = Math.max(1, h.totalTargetMins || 1);
+                    h.varianceMins = h.totalActualMins - (h.totalTargetMins || 0);
+                    historyUpdated = true;
+                }
+            });
+            if (historyUpdated) {
+                saveStorage();
+            }
+        }
+
+        function switchTab(tab) {
+            document.getElementById('viewTracker').classList.add('hidden');
+            document.getElementById('viewPresets').classList.add('hidden');
+            document.getElementById('viewHistory').classList.add('hidden');
+
+            const btnBase = "flex-1 py-2.5 rounded-xl flex items-center justify-center space-x-2 transition ";
+            const btnInactive = "hover:text-slate-900 dark:hover:text-slate-200 text-slate-600 dark:text-slate-400";
+            const btnActive = "bg-white dark:bg-slate-800 text-brand-600 dark:text-brand-400 shadow-sm font-bold";
+
+            document.getElementById('tabTrackBtn').className = btnBase + (tab === 'tracker' ? btnActive : btnInactive);
+            document.getElementById('tabPresetsBtn').className = btnBase + (tab === 'presets' ? btnActive : btnInactive);
+            document.getElementById('tabHistoryBtn').className = btnBase + (tab === 'history' ? btnActive : btnInactive);
+
+            if (tab === 'tracker') document.getElementById('viewTracker').classList.remove('hidden');
+            if (tab === 'presets') document.getElementById('viewPresets').classList.remove('hidden');
+            if (tab === 'history') {
+                document.getElementById('viewHistory').classList.remove('hidden');
+                populateAnalyticsRouteFilter();
+                updateAnalytics();
+            }
+        }
+
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+        }
+
+        function showToast(msg, iconName = 'check-circle-2') {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            const container = document.getElementById('toastIconContainer');
+            if (container) {
+                container.innerHTML = `<i data-lucide="${iconName}" class="w-5 h-5 text-accent-emerald"></i>`;
+            }
+            lucide.createIcons();
+
+            toast.classList.remove('hidden');
+            toast.classList.remove('translate-y-2');
+            
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3000);
+        }
+
+        function renderQuickStartPresets() {
+            const container = document.getElementById('quickStartPresetContainer');
+            if (!container) return;
+            container.innerHTML = presets.map(p => {
+                const totalTargetMins = p.steps.reduce((acc, curr) => acc + curr.targetMinutes, 0);
+                const transitBadge = p.transitDetails ? `<p class="text-[11px] text-brand-600 dark:text-brand-400 font-semibold mt-1">${p.transitDetails}</p>` : '';
+                return `
+                    <div onclick="openStartConfirmModal('${p.id}')" class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-brand-500 dark:hover:border-brand-500 cursor-pointer transition group shadow-sm flex items-center justify-between">
+                        <div class="pr-2">
+                            <h4 class="font-bold text-sm group-hover:text-brand-600 transition">${p.name}</h4>
+                            ${transitBadge}
+                            <p class="text-xs text-slate-400 mt-1">${p.steps.length} Waypoints • Target ${totalTargetMins} mins</p>
+                        </div>
+                        <div class="w-8 h-8 shrink-0 rounded-xl bg-brand-50 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400 flex items-center justify-center group-hover:bg-brand-600 group-hover:text-white transition">
+                            <i data-lucide="play" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function openStartConfirmModal(presetId) {
+            const preset = presets.find(p => p.id === presetId);
+            if (!preset) return;
+
+            document.getElementById('startConfirmPresetId').value = preset.id;
+            document.getElementById('startConfirmPresetName').innerText = preset.name;
+
+            const now = new Date();
+            document.getElementById('startConfirmDateInput').value = now.toISOString().split('T')[0];
+            document.getElementById('startConfirmTimeInput').value = now.toTimeString().substring(0, 5);
+
+            document.getElementById('startConfirmModal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function closeStartConfirmModal() {
+            document.getElementById('startConfirmModal').classList.add('hidden');
+        }
+
+        function confirmAndLaunchJourney() {
+            const presetId = document.getElementById('startConfirmPresetId').value;
+            const preset = presets.find(p => p.id === presetId);
+            if (!preset) return;
+
+            const dateStr = document.getElementById('startConfirmDateInput').value;
+            const timeStr = document.getElementById('startConfirmTimeInput').value;
+
+            let startTimestamp = Date.now();
+            if (dateStr && timeStr) {
+                const dt = new Date(`${dateStr}T${timeStr}:00`);
+                startTimestamp = dt.getTime();
+            }
+
+            activeJourney = {
+                id: 'journey-' + Date.now(),
+                presetId: preset.id,
+                presetName: preset.name,
+                startTime: startTimestamp,
+                stepIndex: 0,
+                steps: preset.steps.map(s => ({
+                    ...s,
+                    markedAt: null,
+                    durationSec: null,
+                    remark: s.remark || ''
+                }))
+            };
+
+            saveStorage();
+            closeStartConfirmModal();
+            showActiveJourneyUI();
+            playChime('mark');
+            
+            const startStr = new Date(startTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+            showToast(`Started ${preset.name} at ${startStr}`);
+        }
+
+        function showActiveJourneyUI() {
+            document.getElementById('noActiveJourneyState').classList.add('hidden');
+            document.getElementById('activeJourneyState').classList.remove('hidden');
+            isAutoSyncingTime = true;
+            syncPickerToCurrentTime();
+            updateActiveJourneyDisplay();
+        }
+
+        function returnToHome() {
+            document.getElementById('activeJourneyState').classList.add('hidden');
+            document.getElementById('noActiveJourneyState').classList.remove('hidden');
+            renderActiveJourneyBanner();
+            showToast('Journey running in background', 'navigation');
+        }
+
+        function resumeJourney() {
+            showActiveJourneyUI();
+        }
+
+        function renderActiveJourneyBanner() {
+            const banner = document.getElementById('activeJourneyBanner');
+            if (!banner) return;
+
+            if (activeJourney && activeJourney.steps) {
+                banner.classList.remove('hidden');
+                document.getElementById('bannerRouteTitle').innerText = activeJourney.presetName;
+                const currentIdx = activeJourney.stepIndex;
+                const totalSteps = activeJourney.steps.length;
+                document.getElementById('bannerProgressBadge').innerText = `Step ${Math.min(currentIdx + 1, totalSteps)} of ${totalSteps}`;
+                
+                const currentStep = activeJourney.steps[currentIdx];
+                document.getElementById('bannerCurrentStep').innerText = currentStep ? `Next step: ${currentStep.name}` : 'Journey finishing...';
+            } else {
+                banner.classList.add('hidden');
+            }
+            lucide.createIcons();
+        }
+
+        function markNextStep() {
+            if (!activeJourney) return;
+
+            const currentIdx = activeJourney.stepIndex;
+            const currentStep = activeJourney.steps[currentIdx];
+            
+            // Build logging timestamp using picker time overlaid onto journey date
+            let logTime = Date.now();
+            if (!isAutoSyncingTime) {
+                const baseDt = currentIdx > 0 ? new Date(activeJourney.steps[currentIdx - 1].markedAt) : new Date(activeJourney.startTime);
+                baseDt.setHours(selectedPickerHour, selectedPickerMinute, 0, 0);
+                logTime = baseDt.getTime();
+
+                // If picked time is earlier than previous timestamp, assume midnight boundary pass
+                const prevTime = currentIdx > 0 ? activeJourney.steps[currentIdx - 1].markedAt : activeJourney.startTime;
+                if (logTime < prevTime) {
+                    logTime += 24 * 60 * 60 * 1000;
+                }
+            }
+
+            const prevTimestamp = currentIdx > 0 ? activeJourney.steps[currentIdx - 1].markedAt : activeJourney.startTime;
+
+            // Capture remark for this waypoint from input or preset
+            const remarkInput = document.getElementById('nextStepRemarkInput');
+            const userRemark = remarkInput ? remarkInput.value.trim() : '';
+
+            activeJourney.steps[currentIdx].markedAt = logTime;
+            activeJourney.steps[currentIdx].durationSec = Math.max(0, Math.floor((logTime - prevTimestamp) / 1000));
+            if (userRemark) {
+                activeJourney.steps[currentIdx].remark = userRemark;
+            }
+
+            activeJourney.stepIndex++;
+
+            if (activeJourney.stepIndex >= activeJourney.steps.length) {
+                // Trip Finished!
+                const totalActualMins = Math.max(1, Math.round((logTime - activeJourney.startTime) / (60 * 1000)));
+                const totalTargetMins = activeJourney.steps.reduce((acc, s) => acc + s.targetMinutes, 0);
+                const varianceMins = totalActualMins - totalTargetMins;
+
+                const completedRecord = {
+                    id: activeJourney.id,
+                    presetId: activeJourney.presetId,
+                    presetName: activeJourney.presetName,
+                    date: new Date(activeJourney.startTime).toISOString(),
+                    totalActualMins: totalActualMins,
+                    totalTargetMins: totalTargetMins,
+                    varianceMins: varianceMins,
+                    steps: activeJourney.steps
+                };
+
+                history.unshift(completedRecord);
+                playChime('finish');
+
+                activeSummaryTrip = completedRecord;
+                
+                activeJourney = null;
+                saveStorage();
+                
+                document.getElementById('activeJourneyState').classList.add('hidden');
+                document.getElementById('noActiveJourneyState').classList.remove('hidden');
+                renderActiveJourneyBanner();
+                updateAnalytics();
+
+                openTripSummaryModal(completedRecord);
+            } else {
+                playChime('mark');
+                saveStorage();
+                
+                // Clear next remark input for next step
+                if (remarkInput) remarkInput.value = '';
+
+                isAutoSyncingTime = true;
+                syncPickerToCurrentTime();
+                
+                updateActiveJourneyDisplay();
+                showToast(`Logged: ${currentStep.name}`, 'check-circle-2');
+            }
+        }
+
+        function abortJourney() {
+            activeJourney = null;
+            saveStorage();
+            document.getElementById('activeJourneyState').classList.add('hidden');
+            document.getElementById('noActiveJourneyState').classList.remove('hidden');
+            renderActiveJourneyBanner();
+            showToast('Journey cancelled', 'x-circle');
+        }
+
+        function updateActiveJourneyDisplay() {
+            if (!activeJourney) return;
+
+            const routeTitle = document.getElementById('activeRouteTitle');
+            if (routeTitle) routeTitle.innerText = activeJourney.presetName;
+
+            const totalSteps = activeJourney.steps.length;
+            const currentIdx = activeJourney.stepIndex;
+            const currentStep = activeJourney.steps[currentIdx];
+
+            // Progress bar and text
+            const stepProgressText = document.getElementById('activeStepProgressText');
+            if (stepProgressText) {
+                stepProgressText.innerText = `Step ${Math.min(currentIdx + 1, totalSteps)} of ${totalSteps}: ${currentStep ? currentStep.name : 'Finished'}`;
+            }
+
+            const progressBar = document.getElementById('activeProgressBar');
+            if (progressBar) {
+                const pct = Math.round(((currentIdx) / totalSteps) * 100);
+                progressBar.style.width = `${Math.max(5, pct)}%`;
+            }
+
+            // Start time clock & Date display
+            const startDt = new Date(activeJourney.startTime);
+            const startStr = startDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+            const startDateStr = startDt.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+            
+            const statStartTime = document.getElementById('statStartTime');
+            if (statStartTime) statStartTime.innerText = startStr;
+
+            const statStartDateStr = document.getElementById('statStartDateStr');
+            if (statStartDateStr) statStartDateStr.innerText = startDateStr;
+
+            const activeStartClockTime = document.getElementById('activeStartClockTime');
+            if (activeStartClockTime) activeStartClockTime.innerText = `Started at ${startStr}`;
+
+            // Calculate Dynamic ETA based on last marked timestamp + remaining target minutes
+            const lastMarkedTimestamp = currentIdx > 0 ? activeJourney.steps[currentIdx - 1].markedAt : activeJourney.startTime;
+            const remainingTargetMins = activeJourney.steps.slice(currentIdx).reduce((acc, s) => acc + s.targetMinutes, 0);
+
+            const dynamicEtaDt = new Date(lastMarkedTimestamp + remainingTargetMins * 60 * 1000);
+            const dynamicEtaStr = dynamicEtaDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+            
+            const statEta = document.getElementById('statEta');
+            if (statEta) statEta.innerText = dynamicEtaStr;
+
+            const statRemaining = document.getElementById('statRemaining');
+            if (statRemaining) statRemaining.innerText = `Remaining: ~${remainingTargetMins}m`;
+
+            // Next Waypoint ETA specifically
+            const statNextStepEta = document.getElementById('statNextStepEta');
+            const statNextStepName = document.getElementById('statNextStepName');
+            
+            if (currentStep && statNextStepEta && statNextStepName) {
+                const nextEtaTimestamp = lastMarkedTimestamp + currentStep.targetMinutes * 60 * 1000;
+                const nextEtaDt = new Date(nextEtaTimestamp);
+                statNextStepEta.innerText = nextEtaDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                statNextStepName.innerText = `${currentStep.name} (+${currentStep.targetMinutes}m target)`;
+            }
+
+            // Pre-fill remark input if present in step
+            const remarkInput = document.getElementById('nextStepRemarkInput');
+            if (remarkInput && currentStep) {
+                remarkInput.value = currentStep.remark || '';
+            }
+
+            // Mark button label
+            const markBtnLabel = document.getElementById('markBtnLabel');
+            if (markBtnLabel && currentStep) {
+                markBtnLabel.innerText = currentIdx < totalSteps - 1 ? `Log Step: ${currentStep.name}` : `Finish Journey (${currentStep.name})`;
+            }
+
+            // Waypoints list rendering with remarks area
+            const container = document.getElementById('activeWaypointsList');
+            if (container) {
+                container.innerHTML = activeJourney.steps.map((step, idx) => {
+                    const isDone = idx < currentIdx;
+                    const isCurrent = idx === currentIdx;
+                    
+                    let statusBadge = '';
+                    let timeInfo = `<span class="text-xs text-slate-400 font-mono">Target: ${step.targetMinutes}m</span>`;
+
+                    if (isDone) {
+                        const markTimeStr = step.markedAt ? new Date(step.markedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+                        const durMins = Math.round((step.durationSec || 0) / 60);
+                        const diff = durMins - step.targetMinutes;
+                        const diffStr = diff > 0 ? `+${diff}m` : (diff < 0 ? `${diff}m` : 'on target');
+                        const diffColor = diff > 0 ? 'text-amber-500' : 'text-emerald-500';
+
+                        statusBadge = `<span class="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs font-bold"><i data-lucide="check" class="w-3.5 h-3.5"></i></span>`;
+                        
+                        timeInfo = `
+                            <div class="flex items-center space-x-2 text-right">
+                                <div>
+                                    <p class="text-xs font-mono font-bold text-slate-800 dark:text-slate-200">${markTimeStr} (${durMins}m)</p>
+                                    <p class="text-[10px] font-semibold ${diffColor}">${diffStr}</p>
+                                </div>
+                                <button onclick="openAmendWaypointModal(${idx})" title="Amend logged stop time & remark" class="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition">
+                                    <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                        `;
+                    } else if (isCurrent) {
+                        statusBadge = `<span class="w-6 h-6 rounded-full bg-brand-600 text-white flex items-center justify-center text-xs font-bold animate-pulse">${idx + 1}</span>`;
+                    } else {
+                        statusBadge = `<span class="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-400 flex items-center justify-center text-xs font-bold">${idx + 1}</span>`;
+                    }
+
+                    const bgClass = isCurrent 
+                        ? 'bg-brand-50/80 dark:bg-brand-950/40 border-brand-300 dark:border-brand-800 shadow-sm' 
+                        : (isDone ? 'bg-slate-50 dark:bg-slate-900/40 border-slate-200/60 dark:border-slate-800/60 opacity-85' : 'bg-slate-50/50 dark:bg-slate-900/20 border-slate-100 dark:border-slate-800/40');
+
+                    const transportPill = step.transport ? `<span class="ml-2 text-[10px] px-2 py-0.5 rounded-md bg-slate-200/60 dark:bg-slate-800 text-slate-500 font-semibold">${step.transport}</span>` : '';
+                    const remarkDisplay = step.remark ? `<p class="text-[11px] text-amber-600 dark:text-amber-400 italic mt-0.5"><i data-lucide="message-square" class="w-3 h-3 inline mr-1"></i>"${step.remark}"</p>` : '';
+
+                    return `
+                        <div class="p-3 rounded-2xl border ${bgClass} flex flex-col gap-1 transition">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    ${statusBadge}
+                                    <div>
+                                        <div class="flex items-center">
+                                            <p class="text-xs font-bold ${isCurrent ? 'text-brand-600 dark:text-brand-400' : 'text-slate-800 dark:text-slate-200'}">${step.name}</p>
+                                            ${transportPill}
+                                        </div>
+                                        <p class="text-[10px] text-slate-400">Step ${idx + 1} • Target: ${step.targetMinutes} mins</p>
+                                    </div>
+                                </div>
+                                ${timeInfo}
+                            </div>
+                            ${remarkDisplay}
+                        </div>
+                    `;
+                }).join('');
+                lucide.createIcons();
+            }
+
+            renderActiveJourneyBanner();
+        }
+
+        function openEditStartTimeModal() {
+            if (!activeJourney) return;
+            const dt = new Date(activeJourney.startTime);
+            document.getElementById('journeyStartDateInput').value = dt.toISOString().split('T')[0];
+            document.getElementById('journeyStartTimeInput').value = dt.toTimeString().substring(0, 5);
+            document.getElementById('editStartTimeModal').classList.remove('hidden');
+        }
+
+        function closeEditStartTimeModal() {
+            document.getElementById('editStartTimeModal').classList.add('hidden');
+        }
+
+        function saveJourneyStartTime() {
+            if (!activeJourney) return;
+            const dateStr = document.getElementById('journeyStartDateInput').value;
+            const timeStr = document.getElementById('journeyStartTimeInput').value;
+            if (!dateStr || !timeStr) return;
+
+            const newStartDt = new Date(`${dateStr}T${timeStr}:00`);
+            const newStartTimestamp = newStartDt.getTime();
+
+            activeJourney.startTime = newStartTimestamp;
+
+            let prevTimestamp = newStartTimestamp;
+            for (let i = 0; i < activeJourney.stepIndex; i++) {
+                if (activeJourney.steps[i].markedAt) {
+                    if (activeJourney.steps[i].markedAt < prevTimestamp) {
+                        activeJourney.steps[i].markedAt = prevTimestamp + 60 * 1000;
+                    }
+                    activeJourney.steps[i].durationSec = Math.max(0, Math.floor((activeJourney.steps[i].markedAt - prevTimestamp) / 1000));
+                    prevTimestamp = activeJourney.steps[i].markedAt;
+                }
+            }
+
+            saveStorage();
+            updateActiveJourneyDisplay();
+            closeEditStartTimeModal();
+            showToast(`Start date & time updated`, 'calendar');
+        }
+
+        function openAmendWaypointModal(stepIdx) {
+            if (!activeJourney || !activeJourney.steps[stepIdx]) return;
+            const step = activeJourney.steps[stepIdx];
+            document.getElementById('amendStepIndex').value = stepIdx;
+            document.getElementById('amendWaypointTitle').innerText = `Amend: ${step.name}`;
+            
+            const markDt = step.markedAt ? new Date(step.markedAt) : new Date();
+            document.getElementById('amendStepDateInput').value = markDt.toISOString().split('T')[0];
+            document.getElementById('amendStepTimeInput').value = markDt.toTimeString().substring(0, 5);
+            document.getElementById('amendStepRemarkInput').value = step.remark || '';
+            document.getElementById('amendWaypointModal').classList.remove('hidden');
+        }
+
+        function closeAmendWaypointModal() {
+            document.getElementById('amendWaypointModal').classList.add('hidden');
+        }
+
+        function saveAmendedWaypoint() {
+            if (!activeJourney) return;
+            const idx = parseInt(document.getElementById('amendStepIndex').value);
+            const dateStr = document.getElementById('amendStepDateInput').value;
+            const timeStr = document.getElementById('amendStepTimeInput').value;
+            const remarkStr = document.getElementById('amendStepRemarkInput').value.trim();
+
+            if (isNaN(idx) || !dateStr || !timeStr) return;
+
+            const updatedDt = new Date(`${dateStr}T${timeStr}:00`);
+            activeJourney.steps[idx].markedAt = updatedDt.getTime();
+            activeJourney.steps[idx].remark = remarkStr;
+
+            let prevTimestamp = activeJourney.startTime;
+            for (let i = 0; i < activeJourney.steps.length; i++) {
+                if (i <= activeJourney.stepIndex && activeJourney.steps[i].markedAt) {
+                    activeJourney.steps[i].durationSec = Math.max(0, Math.floor((activeJourney.steps[i].markedAt - prevTimestamp) / 1000));
+                    prevTimestamp = activeJourney.steps[i].markedAt;
+                }
+            }
+
+            saveStorage();
+            updateActiveJourneyDisplay();
+            closeAmendWaypointModal();
+            showToast(`Updated waypoint time & remark`, 'check-circle-2');
+        }
+
+        function renderPresetsList() {
+            const container = document.getElementById('presetsContainer');
+            if (!container) return;
+            container.innerHTML = presets.map(p => {
+                const totalTargetMins = p.steps.reduce((acc, s) => acc + s.targetMinutes, 0);
+                const transitBadge = p.transitDetails ? `<p class="text-xs font-semibold text-brand-600 dark:text-brand-400 mt-1">${p.transitDetails}</p>` : '';
+                return `
+                    <div class="glass-panel p-5 rounded-3xl space-y-3 shadow-sm">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <h3 class="font-bold text-base text-slate-900 dark:text-white">${p.name}</h3>
+                                ${transitBadge}
+                                <p class="text-xs text-slate-400 mt-0.5">${p.origin} ➔ ${p.destination} • Target: ${totalTargetMins} mins</p>
+                            </div>
+                            <div class="flex space-x-1">
+                                <button onclick="editPreset('${p.id}')" class="p-2 text-slate-400 hover:text-brand-600 transition">
+                                    <i data-lucide="edit-3" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="deletePreset('${p.id}')" class="p-2 text-slate-400 hover:text-rose-500 transition">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1.5 pt-1">
+                            ${p.steps.map((s, i) => `
+                                <div class="text-xs flex justify-between items-center bg-slate-100/70 dark:bg-slate-800/50 p-2 rounded-xl">
+                                    <div class="flex items-center space-x-2">
+                                        <span class="text-slate-600 dark:text-slate-300 font-medium">${i+1}. ${s.name}</span>
+                                        ${s.transport ? `<span class="text-[10px] px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded font-semibold">${s.transport}</span>` : ''}
+                                    </div>
+                                    <span class="font-bold text-slate-400">${s.targetMinutes}m</span>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <button onclick="openStartConfirmModal('${p.id}')" class="w-full py-2.5 bg-brand-50 dark:bg-brand-900/30 hover:bg-brand-600 hover:text-white text-brand-600 dark:text-brand-300 font-bold rounded-xl text-xs transition flex items-center justify-center space-x-1.5">
+                            <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                            <span>Start This Journey Now</span>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+            lucide.createIcons();
+            renderQuickStartPresets();
+        }
+
+        function openCreatePresetModal() {
+            document.getElementById('modalPresetTitle').innerText = 'Create Journey Preset';
+            document.getElementById('presetId').value = '';
+            document.getElementById('presetName').value = '';
+            document.getElementById('presetOrigin').value = '';
+            document.getElementById('presetDestination').value = '';
+            document.getElementById('presetTransitDetails').value = '';
+            
+            const rows = document.getElementById('waypointRows');
+            rows.innerHTML = '';
+            addWaypointRow('Walk to Bus Stop', 3, 'Walk', '');
+            addWaypointRow('Bus Boarded', 12, 'Bus', '');
+            addWaypointRow('Arrival Destination', 5, 'Walk', '');
+
+            document.getElementById('presetModal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function closePresetModal() {
+            document.getElementById('presetModal').classList.add('hidden');
+        }
+
+        function addWaypointRow(name = '', mins = 5, transport = 'Walk', remark = '') {
+            const container = document.getElementById('waypointRows');
+            const rowId = 'wp-' + Date.now() + Math.random().toString(36).substring(2,4);
+            const div = document.createElement('div');
+            div.className = 'space-y-1.5 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60';
+            div.id = rowId;
+            div.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <input type="text" placeholder="Waypoint description" value="${name}" required class="wp-name flex-1 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:outline-none">
+                    <select class="wp-transport px-2 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none">
+                        <option value="Walk" ${transport === 'Walk' ? 'selected' : ''}>Walk</option>
+                        <option value="Bus" ${transport === 'Bus' ? 'selected' : ''}>Bus</option>
+                        <option value="MTR / Rail" ${transport === 'MTR / Rail' ? 'selected' : ''}>MTR / Rail</option>
+                        <option value="Interchange" ${transport === 'Interchange' ? 'selected' : ''}>Interchange</option>
+                    </select>
+                    <input type="number" placeholder="Mins" value="${mins}" required min="1" max="300" class="wp-mins w-16 px-2 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:outline-none text-center font-bold">
+                    <button type="button" onclick="document.getElementById('${rowId}').remove()" class="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg">
+                        <i data-lucide="minus-circle" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <input type="text" placeholder="Default Remark / Note (Optional)" value="${remark}" class="wp-remark w-full px-3 py-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60 bg-white/70 dark:bg-slate-800/70 text-[11px] focus:outline-none">
+            `;
+            container.appendChild(div);
+            lucide.createIcons();
+        }
+
+        function savePreset(e) {
+            e.preventDefault();
+            const id = document.getElementById('presetId').value || 'preset-' + Date.now();
+            const name = document.getElementById('presetName').value;
+            const origin = document.getElementById('presetOrigin').value;
+            const destination = document.getElementById('presetDestination').value;
+            const transitDetails = document.getElementById('presetTransitDetails').value;
+
+            const rows = document.querySelectorAll('#waypointRows > div');
+            const steps = [];
+            rows.forEach(row => {
+                const stepName = row.querySelector('.wp-name').value;
+                const transportMode = row.querySelector('.wp-transport')?.value || 'Walk';
+                const targetMins = parseInt(row.querySelector('.wp-mins').value) || 5;
+                const stepRemark = row.querySelector('.wp-remark')?.value || '';
+                if (stepName) {
+                    steps.push({ name: stepName, targetMinutes: targetMins, transport: transportMode, remark: stepRemark });
+                }
+            });
+
+            if (steps.length === 0) {
+                showToast('Please add at least one waypoint step.', 'x-circle');
+                return;
+            }
+
+            const existingIdx = presets.findIndex(p => p.id === id);
+            const presetData = { id, name, origin, destination, transitDetails, steps };
+
+            if (existingIdx >= 0) {
+                presets[existingIdx] = presetData;
+            } else {
+                presets.push(presetData);
+            }
+
+            saveStorage();
+            renderPresetsList();
+            populateAnalyticsRouteFilter();
+            closePresetModal();
+            showToast('Preset saved successfully!');
+        }
+
+        function editPreset(id) {
+            const p = presets.find(item => item.id === id);
+            if (!p) return;
+
+            document.getElementById('modalPresetTitle').innerText = 'Edit Journey Preset';
+            document.getElementById('presetId').value = p.id;
+            document.getElementById('presetName').value = p.name;
+            document.getElementById('presetOrigin').value = p.origin;
+            document.getElementById('presetDestination').value = p.destination;
+            document.getElementById('presetTransitDetails').value = p.transitDetails || '';
+
+            const rows = document.getElementById('waypointRows');
+            rows.innerHTML = '';
+            p.steps.forEach(s => addWaypointRow(s.name, s.targetMinutes, s.transport || 'Walk', s.remark || ''));
+
+            document.getElementById('presetModal').classList.remove('hidden');
+        }
+
+        function deletePreset(id) {
+            presets = presets.filter(p => p.id !== id);
+            saveStorage();
+            renderPresetsList();
+            populateAnalyticsRouteFilter();
+            showToast('Preset deleted', 'trash-2');
+        }
+
+        function populateAnalyticsRouteFilter() {
+            const select = document.getElementById('analyticsRouteFilter');
+            if (!select) return;
+            const currentVal = select.value;
+            select.innerHTML = '<option value="ALL">All Preset Routes</option>' + 
+                presets.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+            if (currentVal) select.value = currentVal;
+        }
+
+        function getFilteredHistory() {
+            const routeFilter = document.getElementById('analyticsRouteFilter')?.value || 'ALL';
+            const modeFilter = document.getElementById('analyticsModeFilter')?.value || 'ALL';
+
+            return history.filter(h => {
+                if (routeFilter !== 'ALL' && h.presetId !== routeFilter) return false;
+                if (modeFilter !== 'ALL') {
+                    const hasMode = h.steps && h.steps.some(s => (s.transport || '').toLowerCase().includes(modeFilter.toLowerCase()));
+                    if (!hasMode) return false;
+                }
+                return true;
+            });
+        }
+
+        function updateAnalytics() {
+            const filtered = getFilteredHistory();
+            document.getElementById('statTotalJourneys').innerText = filtered.length;
+            
+            if (filtered.length === 0) {
+                document.getElementById('statAvgDuration').innerText = '0m';
+                document.getElementById('statAvgDelay').innerText = '+0m';
+                document.getElementById('statOnTimeRate').innerText = '100%';
+                renderHistoryLogs();
+                updateChart([]);
+                return;
+            }
+
+            const totalActual = filtered.reduce((acc, h) => acc + h.totalActualMins, 0);
+            const totalVariance = filtered.reduce((acc, h) => acc + h.varianceMins, 0);
+            const onTimeCount = filtered.filter(h => h.varianceMins <= 2).length;
+
+            const avgDur = Math.round(totalActual / filtered.length);
+            const avgDelay = (totalVariance / filtered.length).toFixed(1);
+            const onTimeRate = Math.round((onTimeCount / filtered.length) * 100);
+
+            document.getElementById('statAvgDuration').innerText = `${avgDur}m`;
+            document.getElementById('statAvgDelay').innerText = `${avgDelay >= 0 ? '+' : ''}${avgDelay}m`;
+            document.getElementById('statOnTimeRate').innerText = `${onTimeRate}%`;
+
+            renderHistoryLogs();
+            updateChart(filtered);
+        }
+
+        function renderHistoryLogs() {
+            const container = document.getElementById('historyLogsContainer');
+            if (!container) return;
+
+            const filtered = getFilteredHistory();
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">No matching journey records found.</p>`;
+                return;
+            }
+
+            container.innerHTML = filtered.slice(0, 15).map(h => {
+                const dateStr = new Date(h.date).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+                const delayText = h.varianceMins > 0 ? `+${h.varianceMins}m` : (h.varianceMins < 0 ? `${h.varianceMins}m` : `On time`);
+                const colorClass = h.varianceMins > 0 ? 'text-amber-500' : 'text-emerald-500';
+
+                return `
+                    <div class="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs">
+                        <div>
+                            <h5 class="font-bold text-slate-800 dark:text-slate-200 text-sm">${h.presetName}</h5>
+                            <p class="text-slate-400 mt-0.5">${dateStr} • ${h.steps.length} waypoints</p>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <div class="text-right">
+                                <p class="font-bold font-mono text-sm">${h.totalActualMins} mins</p>
+                                <p class="font-semibold ${colorClass}">${delayText}</p>
+                            </div>
+                            <div class="flex items-center space-x-1 pl-1 border-l border-slate-200 dark:border-slate-800">
+                                <button onclick="openTripSummaryModalById('${h.id}')" title="View Summary & Export Text" class="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition">
+                                    <i data-lucide="file-text" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="deleteTripFromHistory('${h.id}')" title="Delete Log" class="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function openTripSummaryModalById(tripId) {
+            const trip = history.find(h => h.id === tripId);
+            if (trip) openTripSummaryModal(trip);
+        }
+
+        function openTripSummaryModal(trip) {
+            activeSummaryTrip = trip;
+            document.getElementById('summaryModalTitle').innerText = `${trip.presetName} - Journey Summary`;
+            document.getElementById('summaryActualTime').innerText = `${trip.totalActualMins}m`;
+            document.getElementById('summaryTargetTime').innerText = `${trip.totalTargetMins}m`;
+            
+            const varElem = document.getElementById('summaryVariance');
+            const diffStr = trip.varianceMins > 0 ? `+${trip.varianceMins}m` : (trip.varianceMins < 0 ? `${trip.varianceMins}m` : '0m');
+            varElem.innerText = diffStr;
+            varElem.className = `text-xl font-extrabold ${trip.varianceMins > 0 ? 'text-amber-500' : 'text-emerald-500'}`;
+
+            const startDt = new Date(trip.date);
+            document.getElementById('summaryDateLine').innerText = `Departure Date: ${startDt.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
+
+            // Render waypoints breakdown
+            const listContainer = document.getElementById('summaryWaypointsList');
+            let prevTime = startDt.getTime();
+
+            listContainer.innerHTML = trip.steps.map((step, idx) => {
+                const markDt = step.markedAt ? new Date(step.markedAt) : new Date(prevTime);
+                const markTimeStr = markDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                const durMins = step.durationSec ? Math.round(step.durationSec / 60) : step.targetMinutes;
+                prevTime = markDt.getTime();
+
+                const remarkTxt = step.remark ? `<p class="text-[11px] text-amber-600 dark:text-amber-400 italic mt-0.5">Note: ${step.remark}</p>` : '';
+
+                return `
+                    <div class="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 text-xs">
+                        <div class="flex items-center justify-between">
+                            <span class="font-bold text-slate-800 dark:text-slate-200">${idx + 1}. ${step.name} (${step.transport || 'Walk'})</span>
+                            <span class="font-mono font-bold text-slate-700 dark:text-slate-300">${markTimeStr} (${durMins}m)</span>
+                        </div>
+                        ${remarkTxt}
+                    </div>
+                `;
+            }).join('');
+
+            // Generate exportable plain text representation
+            let exportText = `=== COMMUTE JOURNEY SUMMARY (Timemarkee ${APP_VERSION}) ===\n`;
+            exportText += `Route: ${trip.presetName}\n`;
+            exportText += `Date: ${startDt.toLocaleDateString()} ${startDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n`;
+            exportText += `Total Actual Duration: ${trip.totalActualMins} mins (Target: ${trip.totalTargetMins} mins, Variance: ${diffStr})\n`;
+            exportText += `-----------------------------------\n`;
+            exportText += `WAYPOINT BREAKDOWN:\n`;
+
+            trip.steps.forEach((s, idx) => {
+                const markDt = s.markedAt ? new Date(s.markedAt) : null;
+                const timeStr = markDt ? markDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--';
+                const durMins = s.durationSec ? Math.round(s.durationSec / 60) : s.targetMinutes;
+                exportText += `${idx + 1}. ${s.name} [${s.transport || 'Walk'}]\n`;
+                exportText += `   Time: ${timeStr} | Leg Duration: ${durMins}m (Target: ${s.targetMinutes}m)\n`;
+                if (s.remark) {
+                    exportText += `   Remark: ${s.remark}\n`;
+                }
+            });
+            exportText += `===================================\n`;
+
+            const textArea = document.getElementById('summaryExportTextArea');
+            if (textArea) textArea.value = exportText;
+
+            document.getElementById('tripSummaryModal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function closeTripSummaryModal() {
+            document.getElementById('tripSummaryModal').classList.add('hidden');
+        }
+
+        function copySummaryText() {
+            const textArea = document.getElementById('summaryExportTextArea');
+            if (!textArea) return;
+
+            textArea.select();
+            textArea.setSelectionRange(0, 99999);
+
+            let success = false;
+            try {
+                success = document.execCommand('copy');
+            } catch (err) {
+                console.error("ExecCommand copy error", err);
+            }
+
+            if (success) {
+                showToast('Summary copied to clipboard!', 'copy');
+            } else {
+                showToast('Text highlighted. Press Ctrl+C / Cmd+C to copy', 'file-text');
+            }
+        }
+
+        function deleteTripFromHistory(tripId) {
+            history = history.filter(h => h.id !== tripId);
+            saveStorage();
+            updateAnalytics();
+            showToast('Trip log deleted', 'trash-2');
+        }
+
+        function initChart() {
+            const canvas = document.getElementById('durationChart');
+            if (!canvas || chartInstance) return;
+            const ctx = canvas.getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Actual Commute (mins)',
+                            data: [],
+                            borderColor: '#6366f1',
+                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.3
+                        },
+                        {
+                            label: 'Target Estimated (mins)',
+                            data: [],
+                            borderColor: '#94a3b8',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            fill: false,
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12, font: { family: 'Plus Jakarta Sans', size: 11 } } }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(156, 163, 175, 0.1)' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function updateChart(dataset = []) {
+            initChart();
+            if (!chartInstance) return;
+            const recentHistory = [...dataset].reverse().slice(-7);
+
+            chartInstance.data.labels = recentHistory.map(h => new Date(h.date).toLocaleDateString([], { month: 'numeric', day: 'numeric' }));
+            chartInstance.data.datasets[0].data = recentHistory.map(h => h.totalActualMins);
+            chartInstance.data.datasets[1].data = recentHistory.map(h => h.totalTargetMins);
+            chartInstance.update();
+        }
+
+        function clearHistory() {
+            history = [];
+            saveStorage();
+            updateAnalytics();
+            showToast('History cleared');
+        }
+    </script>
+</body>
+</html>
